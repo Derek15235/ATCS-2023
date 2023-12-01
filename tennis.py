@@ -1,6 +1,7 @@
 import pygame
 import sys
 import random
+import math
 
 # Constants
 WIDTH, HEIGHT = 600, 800
@@ -9,6 +10,7 @@ PADDLE_WIDTH, PADDLE_HEIGHT = 80, 80
 FPS = 60
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
+YELLOW = (255, 255, 0)
 
 class Ball:
     def __init__(self, x, y, radius, speed):
@@ -27,6 +29,11 @@ class Ball:
 
     def bounce_vertical(self):
         self.direction[1] = -self.direction[1]
+    
+    def move_towards(self, target_x, target_y):
+        angle = math.atan2(target_y - self.y, target_x - self.x)
+        self.direction = [math.cos(angle), math.sin(angle)]
+
 
 class Paddle:
     def __init__(self, x, y, width, height, speed):
@@ -48,6 +55,26 @@ class Paddle:
     def move_down(self):
         self.y += self.speed
 
+class YellowBox:
+    def __init__(self, x, y, width, height, duration):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.duration = duration
+        self.timer = 0
+
+    def draw(self, screen):
+        pygame.draw.rect(screen, YELLOW, (self.x, self.y, self.width, self.height))
+
+    def update(self):
+        self.timer += 1
+        return self.timer >= self.duration
+    def is_ball_near(self, ball):
+        # Calculate the distance between the center of the box and the ball
+        distance = math.sqrt((self.x + self.width / 2 - ball.x) ** 2 + (self.y + self.height / 2 - ball.y) ** 2)
+        return distance < BALL_RADIUS + max(self.width, self.height) / 2
+
 class Game:
     def __init__(self, width, height):
         pygame.init()
@@ -63,11 +90,16 @@ class Game:
         self.player2_image = pygame.image.load("player2.png")
         self.player2_image = pygame.transform.scale(self.player2_image, (PADDLE_WIDTH, PADDLE_HEIGHT))
 
-        self.clock = pygame.time.Clock()
+        # Load background image
+        self.background = pygame.image.load("tennis_court.png")
+        self.background = pygame.transform.scale(self.background, (WIDTH, HEIGHT))
 
-        self.ball = Ball(width // 2, height // 2, BALL_RADIUS, 3)
-        self.paddle1 = Paddle(width // 2 - PADDLE_WIDTH // 2, 0, PADDLE_WIDTH, PADDLE_HEIGHT, 5)
-        self.paddle2 = Paddle(width // 2 - PADDLE_WIDTH // 2, height - PADDLE_HEIGHT, PADDLE_WIDTH, PADDLE_HEIGHT, 5)
+        self.clock = pygame.time.Clock()
+        self.yellow_box = None
+
+        self.ball = Ball(width // 2, height // 2, BALL_RADIUS, 5)
+        self.paddle1 = Paddle(width // 2 - PADDLE_WIDTH // 2, 0, PADDLE_WIDTH, PADDLE_HEIGHT, 10)
+        self.paddle2 = Paddle(width // 2 - PADDLE_WIDTH // 2, height - PADDLE_HEIGHT, PADDLE_WIDTH, PADDLE_HEIGHT, 10)
 
         self.score = [0, 0]
 
@@ -83,6 +115,10 @@ class Game:
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN and self.yellow_box is None:
+                # Create a yellow box at the mouse click position
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                self.yellow_box = YellowBox(mouse_x, mouse_y, 20, 20, 120)
 
     def update(self):
         keys = pygame.key.get_pressed()
@@ -111,6 +147,19 @@ class Game:
                 self.delaying = False
                 self.delay_timer = 0
         else:
+            if self.yellow_box:
+                # Move the ball towards the center of the yellow box
+                self.ball.move_towards(self.yellow_box.x + self.yellow_box.width / 2,
+                                        self.yellow_box.y + self.yellow_box.height / 2)
+
+                # Check if the ball is near the yellow box and make it disappear
+                if self.yellow_box.is_ball_near(self.ball):
+                    self.yellow_box = None
+
+                # Update and check if the yellow box duration has expired
+                if self.yellow_box and self.yellow_box.update():
+                    self.yellow_box = None
+
             self.ball.move()
 
             # Ball collisions with walls
@@ -133,8 +182,8 @@ class Game:
                 and self.paddle2.x <= self.ball.x <= self.paddle2.x + self.paddle2.width
                 and self.ball.y - self.ball.radius <= self.paddle2.y
             ):
-                self.ball.bounce_vertical()
-                self.delaying = True
+                # If the ball hits player2, stop the ball and wait for a click
+                self.ball.direction = [0, 0]
 
             # Ball out of bounds
             if self.ball.y <= 0:
@@ -154,8 +203,8 @@ class Game:
         self.ball.direction = [random.choice([-1, 1]), random.choice([-1, 1])]
 
     def draw(self):
-        # Clear the screen
-        self.screen.fill(BLACK)
+        # Draw background
+        self.screen.blit(self.background, (0, 0))
 
         # Draw player images and ball
         self.screen.blit(self.player1_image, (self.paddle1.x, self.paddle1.y))
@@ -165,6 +214,14 @@ class Game:
         # Draw the score
         score_text = self.font.render(f"{self.score[0]} - {self.score[1]}", True, WHITE)
         self.screen.blit(score_text, (self.WIDTH // 2 - score_text.get_width() // 2, 20))
+
+        # Draw the yellow box if it exists
+        if self.yellow_box:
+            self.yellow_box.draw(self.screen)
+
+        # Update the display
+        pygame.display.flip()
+
 
         # Update the display
         pygame.display.flip()
@@ -179,3 +236,4 @@ class Game:
 if __name__ == "__main__":
     game = Game(WIDTH, HEIGHT)
     game.run()
+
