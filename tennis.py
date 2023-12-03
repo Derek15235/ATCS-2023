@@ -5,7 +5,7 @@ import math
 
 # Constants
 WIDTH, HEIGHT = 600, 800
-BALL_RADIUS = 10
+BALL_RADIUS = 8
 PADDLE_WIDTH, PADDLE_HEIGHT = 80, 80
 FPS = 60
 WHITE = (255, 255, 255)
@@ -18,17 +18,11 @@ class Ball:
         self.y = y
         self.radius = radius
         self.speed = speed
-        self.direction = [random.choice([-1, 1]), random.choice([-1, 1])]
+        self.direction = [random.choice([.1, -.1, .2, -.2, .3, -.3, .4, -.4, -.5, .5]), random.choice([.1, -.1, .2, -.2, .3, -.3, .4, -.4, -.5, .5])]
 
     def move(self):
         self.x += self.speed * self.direction[0]
         self.y += self.speed * self.direction[1]
-
-    def bounce_horizontal(self):
-        self.direction[0] = -self.direction[0]
-
-    def bounce_vertical(self):
-        self.direction[1] = -self.direction[1]
     
     def move_towards(self, target_x, target_y):
         angle = math.atan2(target_y - self.y, target_x - self.x)
@@ -84,16 +78,18 @@ class Game:
         self.screen = pygame.display.set_mode((width, height))
         pygame.display.set_caption("Vertical Tennis Game")
 
-        # Load player images
+        # Load player images and scale them down
         self.player1_image = pygame.image.load("player1.png")
-        self.player1_image = pygame.transform.scale(self.player1_image, (PADDLE_WIDTH, PADDLE_HEIGHT))
+        self.player1_image = pygame.transform.scale(self.player1_image, (int(PADDLE_WIDTH * 7 / 8), int(PADDLE_HEIGHT * 7 / 8)))
 
         self.player2_image = pygame.image.load("player2.png")
-        self.player2_image = pygame.transform.scale(self.player2_image, (PADDLE_WIDTH, PADDLE_HEIGHT))
+        self.player2_image = pygame.transform.scale(self.player2_image, (int(PADDLE_WIDTH * 7 / 8), int(PADDLE_HEIGHT * 7 / 8)))
 
-        # Load background image
-        self.background = pygame.image.load("tennis_court.png")
-        self.background = pygame.transform.scale(self.background, (WIDTH, HEIGHT))
+        # Load background image (scaled down)
+        background_original = pygame.image.load("tennis_court.png")
+        background_original = pygame.transform.scale(background_original, (WIDTH - 200, HEIGHT - 200))
+        self.background = pygame.Surface((WIDTH, HEIGHT))  # Smaller size
+        self.background.blit(background_original, (100, 100))
 
         self.clock = pygame.time.Clock()
         self.yellow_box = None
@@ -149,7 +145,7 @@ class Game:
                 self.delaying = False
                 self.delay_timer = 0
                 # Start moving the ball after the delay
-                self.ball.direction = [random.choice([-1, 1]), random.choice([-1, 1])]
+                self.ball.direction = [random.choice([.1, -.1, .2, -.2, .3, -.3, .4, -.4, -.5, .5]), random.choice([.1, -.1, .2, -.2, .3, -.3, .4, -.4, -.5, .5])]
 
         else:
             if self.yellow_box and self.hit_player:
@@ -170,25 +166,20 @@ class Game:
 
             self.ball.move()
 
-            # Ball collisions with walls
-            if self.ball.x <= 0 or self.ball.x >= self.WIDTH - self.ball.radius:
-                self.ball.bounce_horizontal()
-
             # Ball collisions with paddles
             if (
                 not self.delaying
-                and self.paddle1.y <= self.ball.y <= self.paddle1.y + self.paddle1.height
-                and self.paddle1.x <= self.ball.x <= self.paddle1.x + self.paddle1.width
-                and self.ball.y + self.ball.radius >= self.paddle1.y + self.paddle1.height
+                and self.paddle1.x < self.ball.x < self.paddle1.x + self.paddle1.width
+                and self.paddle1.y < self.ball.y < self.paddle1.y + self.paddle1.height
             ):
+                # If the ball hits player1, stop the ball and wait for a click
                 self.ball.direction = [0, 0]
                 self.hit_player = True
 
             elif (
                 not self.delaying
-                and self.paddle2.y <= self.ball.y <= self.paddle2.y + self.paddle2.height
-                and self.paddle2.x <= self.ball.x <= self.paddle2.x + self.paddle2.width
-                and self.ball.y - self.ball.radius <= self.paddle2.y
+                and self.paddle2.x < self.ball.x < self.paddle2.x + self.paddle2.width
+                and self.paddle2.y < self.ball.y < self.paddle2.y + self.paddle2.height
             ):
                 # If the ball hits player2, stop the ball and wait for a click
                 self.ball.direction = [0, 0]
@@ -201,6 +192,13 @@ class Game:
             elif self.ball.y >= self.HEIGHT - self.ball.radius:
                 self.score[0] += 1
                 self.reset_positions()
+            elif (self.ball.x <= 0 or self.ball.x >= self.WIDTH - self.ball.radius) and self.ball.y <= self.HEIGHT // 2 - self.ball.radius:
+                self.score[1] += 1
+                self.reset_positions()
+            elif (self.ball.x <= 0 or self.ball.x >= self.WIDTH - self.ball.radius) and self.ball.y >= HEIGHT // 2 - self.ball.radius:
+                self.score[0] += 1
+                self.reset_positions()
+            
 
     def reset_positions(self):
         self.paddle1.x = self.WIDTH // 2 - PADDLE_WIDTH // 2
@@ -218,6 +216,12 @@ class Game:
     def draw(self):
         # Draw background
         self.screen.blit(self.background, (0, 0))
+
+         # Draw red borders around the screen
+        pygame.draw.rect(self.screen, (255, 0, 0), (0, 0, self.WIDTH, 5))                   # Top border
+        pygame.draw.rect(self.screen, (255, 0, 0), (0, self.HEIGHT - 5, self.WIDTH, 5))  # Bottom border
+        pygame.draw.rect(self.screen, (255, 0, 0), (0, 0, 5, self.HEIGHT))                # Left border
+        pygame.draw.rect(self.screen, (255, 0, 0), (self.WIDTH - 5, 0, 5, self.HEIGHT))  # Right border
 
         # Draw player images and ball
         self.screen.blit(self.player1_image, (self.paddle1.x, self.paddle1.y))
