@@ -70,6 +70,7 @@ class YellowBox:
     def update(self):
         self.timer += 1
         return self.timer >= self.duration
+
     def is_ball_near(self, ball):
         # Calculate the distance between the center of the box and the ball
         distance = math.sqrt((self.x + self.width / 2 - ball.x) ** 2 + (self.y + self.height / 2 - ball.y) ** 2)
@@ -96,6 +97,7 @@ class Game:
 
         self.clock = pygame.time.Clock()
         self.yellow_box = None
+        self.hit_player = False
 
         self.ball = Ball(width // 2, height // 2, BALL_RADIUS, 5)
         self.paddle1 = Paddle(width // 2 - PADDLE_WIDTH // 2, 0, PADDLE_WIDTH, PADDLE_HEIGHT, 10)
@@ -143,22 +145,28 @@ class Game:
 
         if self.delaying:
             self.delay_timer += 1
-            if self.delay_timer >= FPS:  # 1 second delay
+            if self.delay_timer >= FPS * 2:  # 2 seconds delay
                 self.delaying = False
                 self.delay_timer = 0
+                # Start moving the ball after the delay
+                self.ball.direction = [random.choice([-1, 1]), random.choice([-1, 1])]
+
         else:
-            if self.yellow_box:
+            if self.yellow_box and self.hit_player:
+                
                 # Move the ball towards the center of the yellow box
                 self.ball.move_towards(self.yellow_box.x + self.yellow_box.width / 2,
                                         self.yellow_box.y + self.yellow_box.height / 2)
 
-                # Check if the ball is near the yellow box and make it disappear
-                if self.yellow_box.is_ball_near(self.ball):
-                    self.yellow_box = None
+                self.hit_player = False
 
-                # Update and check if the yellow box duration has expired
-                if self.yellow_box and self.yellow_box.update():
-                    self.yellow_box = None
+            # Check if the ball is near the yellow box and make it disappear
+            if self.yellow_box and self.yellow_box.is_ball_near(self.ball):
+                self.yellow_box = None
+
+            # Update and check if the yellow box duration has expired
+            if self.yellow_box and self.yellow_box.update():
+                self.yellow_box = None
 
             self.ball.move()
 
@@ -173,8 +181,8 @@ class Game:
                 and self.paddle1.x <= self.ball.x <= self.paddle1.x + self.paddle1.width
                 and self.ball.y + self.ball.radius >= self.paddle1.y + self.paddle1.height
             ):
-                self.ball.bounce_vertical()
-                self.delaying = True
+                self.ball.direction = [0, 0]
+                self.hit_player = True
 
             elif (
                 not self.delaying
@@ -184,6 +192,7 @@ class Game:
             ):
                 # If the ball hits player2, stop the ball and wait for a click
                 self.ball.direction = [0, 0]
+                self.hit_player = True
 
             # Ball out of bounds
             if self.ball.y <= 0:
@@ -200,7 +209,11 @@ class Game:
         self.paddle2.y = self.HEIGHT - PADDLE_HEIGHT
         self.ball.x = self.WIDTH // 2
         self.ball.y = self.HEIGHT // 2
-        self.ball.direction = [random.choice([-1, 1]), random.choice([-1, 1])]
+        self.ball.direction = [0, 0]  # Stop the ball initially
+
+        # Set a delay for 2 seconds
+        self.delaying = True
+        self.delay_timer = 0
 
     def draw(self):
         # Draw background
@@ -227,11 +240,24 @@ class Game:
         pygame.display.flip()
 
     def run(self):
+        show_initial_frame = True
+        initial_frame_timer = 0
+
         while True:
             self.handle_events()
-            self.update()
-            self.draw()
-            self.clock.tick(FPS)
+
+            if show_initial_frame:
+                self.draw()
+                initial_frame_timer += 1
+
+                if initial_frame_timer >= FPS * 2:  # Pause for 2 seconds
+                    show_initial_frame = False
+                    initial_frame_timer = 0
+
+            else:
+                self.update()
+                self.draw()
+                self.clock.tick(FPS)
 
 if __name__ == "__main__":
     game = Game(WIDTH, HEIGHT)
