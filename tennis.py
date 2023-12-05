@@ -64,11 +64,33 @@ class YellowBox:
     def update(self):
         self.timer += 1
         return self.timer >= self.duration
+    
+class AI:
+    def __init__(self, racquet, ball):
+        self.racquet = racquet
+        self.ball = ball
 
-    def is_ball_near(self, ball):
-        # Calculate the distance between the center of the box and the ball
-        distance = math.sqrt((self.x + self.width / 2 - ball.x) ** 2 + (self.y + self.height / 2 - ball.y) ** 2)
-        return distance < BALL_RADIUS + max(self.width, self.height) / 2
+    # Basic function for moving the AI
+    def move(self):
+        self.racquet.x += self.racquet.speed * self.direction[0]
+        self.racquet.y += self.racquet.speed * self.direction[1]
+        
+
+    def move_towards_ball(self):
+        if self.ball.direction[1] < 0:
+            angle = math.atan2(self.ball.y - self.racquet.y, self.ball.x - self.racquet.x)
+            self.direction = [math.cos(angle), math.sin(angle)]
+            # Move the AI near the ball once the ball is hit, make sure the AI can't cross the the line
+            if self.racquet.y < HEIGHT // 2 - self.racquet.height and self.ball.y < (HEIGHT // 2 - self.ball.radius) + 100:
+                self.move()
+            elif self.ball.y < HEIGHT // 2 - self.ball.radius:
+                self.racquet.y -= self.racquet.speed * abs(self.direction[1])
+        else:
+            self.racquet.direction = [0, 0]
+    
+        
+
+    
 
 class Game:
     def __init__(self, width, height):
@@ -95,11 +117,13 @@ class Game:
 
         self.clock = pygame.time.Clock()
         self.yellow_box = None
-        self.hit_player = False
+        self.collide = False
         self.current = None
 
         self.ball = Ball(width // 2, height // 2, BALL_RADIUS, 5)
-        self.racquet_ai = Racquet(width // 2 - RACQUET_WIDTH // 2, 0, RACQUET_WIDTH, RACQUET_HEIGHT, 10)
+        self.racquet_ai = Racquet(width // 2 - RACQUET_WIDTH // 2, 0, RACQUET_WIDTH, RACQUET_HEIGHT, 6)
+        self.ai_controller = AI(self.racquet_ai, self.ball)
+
         self.racquet_player = Racquet(width // 2 - RACQUET_WIDTH // 2, height - RACQUET_HEIGHT, RACQUET_WIDTH, RACQUET_HEIGHT, 10)
 
         self.score = [0, 0]
@@ -111,28 +135,30 @@ class Game:
 
         # Fonts
         self.font = pygame.font.Font(None, 36)
+        # Add a font for displaying "OUT" message
+        self.out_font = pygame.font.Font(None, 72)
 
          # Define designated boxes for each player
         self.ai_box = pygame.Rect(self.WIDTH// 4, self.HEIGHT// 2 , self.WIDTH// 2, self.court_height // 2)
         self.player_box = pygame.Rect(self.WIDTH // 4, 100, self.WIDTH // 2, self.court_height // 2)
-        # Colors
-        self.GREEN = (0, 255, 0)
 
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            elif event.type == pygame.MOUSEBUTTONDOWN and self.yellow_box is None and self.hit_player:
+            elif event.type == pygame.MOUSEBUTTONDOWN and self.yellow_box is None and self.collide:
                 # Create a yellow box at the mouse click position
                 mouse_x, mouse_y = pygame.mouse.get_pos()
 
                 if (self.current == "ai" and self.ai_box.collidepoint(mouse_x, mouse_y)) or (self.current == "player" and self.player_box.collidepoint(mouse_x, mouse_y)):
-                    self.yellow_box = YellowBox(mouse_x, mouse_y, 20, 20, 120)
+                    self.yellow_box = YellowBox(mouse_x, mouse_y, 20, 20, 30)
                 else:
                     # Some altered/added code: yellow box is drawn, displaying its out
                     self.yellow_box = YellowBox(mouse_x, mouse_y, 20, 20, 120)
                     self.yellow_box.draw(self.screen)
+                    out_text = self.out_font.render("OUT", True, WHITE)
+                    self.screen.blit(out_text, (self.WIDTH // 2 - out_text.get_width() // 2, self.HEIGHT // 2 - out_text.get_height() // 2))
                     pygame.display.flip()
                     pygame.time.delay(1000)
                     self.yellow_box = None
@@ -145,14 +171,7 @@ class Game:
     def update(self):
         keys = pygame.key.get_pressed()
 
-        if keys[pygame.K_LEFT] and self.racquet_ai.x > 0:
-            self.racquet_ai.move_left()
-        if keys[pygame.K_RIGHT] and self.racquet_ai.x < self.WIDTH - self.racquet_ai.width:
-            self.racquet_ai.move_right()
-        if keys[pygame.K_UP] and self.racquet_ai.y > 0:
-            self.racquet_ai.move_up()
-        if keys[pygame.K_DOWN] and self.racquet_ai.y < self.HEIGHT // 2 - self.racquet_ai.height:
-            self.racquet_ai.move_down()
+        
 
         if keys[pygame.K_a] and self.racquet_player.x > 0:
             self.racquet_player.move_left()
@@ -172,17 +191,15 @@ class Game:
                 self.ball.direction = [random.choice([.1, -.1, .2, -.2, .3, -.3, .4, -.4, -.5, .5]), random.choice([.1, -.1, .2, -.2, .3, -.3, .4, -.4, -.5, .5])]
 
         else:
-            if self.yellow_box and self.hit_player:
-                
+            self.ai_controller.move_towards_ball()  # Move the racquet_ai based on AI logic
+
+            if self.yellow_box and self.collide:
+        
                 # Move the ball towards the center of the yellow box
                 self.ball.move_towards(self.yellow_box.x + self.yellow_box.width / 2,
                                         self.yellow_box.y + self.yellow_box.height / 2)
 
-                self.hit_player = False
-
-            # Check if the ball is near the yellow box and make it disappear
-            if self.yellow_box and self.yellow_box.is_ball_near(self.ball):
-                self.yellow_box = None
+                self.collide = False
 
             # Update and check if the yellow box duration has expired
             if self.yellow_box and self.yellow_box.update():
@@ -196,9 +213,9 @@ class Game:
                 and self.racquet_ai.x < self.ball.x < self.racquet_ai.x + self.racquet_ai.width
                 and self.racquet_ai.y < self.ball.y < self.racquet_ai.y + self.racquet_ai.height
             ):
-                # If the ball hits player1, stop the ball and wait for a click
+                # If the ball hits ai, stop the ball and wait for a click
                 self.ball.direction = [0, 0]
-                self.hit_player = True
+                self.collide = True
                 self.current = "ai"
 
             elif (
@@ -206,9 +223,9 @@ class Game:
                 and self.racquet_player.x < self.ball.x < self.racquet_player.x + self.racquet_player.width
                 and self.racquet_player.y < self.ball.y < self.racquet_player.y + self.racquet_player.height
             ):
-                # If the ball hits player2, stop the ball and wait for a click
+                # If the ball hits player, stop the ball and wait for a click
                 self.ball.direction = [0, 0]
-                self.hit_player = True
+                self.collide = True
                 self.current = "player"
 
             # Ball out of bounds
