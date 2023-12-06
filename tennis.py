@@ -3,6 +3,7 @@ import pygame
 import sys
 import random
 import math
+from fsm import FSM
 
 # Constants
 WIDTH, HEIGHT = 600, 800
@@ -67,11 +68,33 @@ class YellowBox:
         return self.timer >= self.duration
     
 class AI:
-    def __init__(self, racquet, ball, box, error):
+    def __init__(self, racquet, ball, box, error, out_func):
         self.racquet = racquet
         self.ball = ball
         self.box = box
         self.error = error
+        self.out_func = out_func
+
+        self.fsm = FSM("middle moving")
+        self.init_fsm()
+    
+    def init_fsm(self):
+        # Ball moving towards ai
+        self.fsm.add_transition("towards", "to ball", self.move_towards_ball)
+        self.fsm.add_transition("towards", "middle moving", self.move_towards_ball, "to ball")
+
+        # Ball moving away from ai
+        self.fsm.add_transition("away", "hit ball", self.move_towards_middle, "middle moving")
+        self.fsm.add_transition("away", "middle moving", self.move_towards_middle)
+
+        self.fsm.add_transition("serving", "middle moving", self.move_towards_middle)
+
+
+        # ai hits ball, then starts go back to middle
+        self.fsm.add_transition("ai hit", "to ball", self.random_hit, "middle moving")
+        self.fsm.add_transition("player hit", "middle moving", self.move_towards_middle)
+
+        
 
     # Basic function for moving the AI
     def move(self):
@@ -80,39 +103,35 @@ class AI:
         
 
     def move_towards_ball(self):
-        if self.ball.direction[1] < 0:
-            angle = math.atan2(self.ball.y - self.racquet.y, self.ball.x - self.racquet.x)
-            self.direction = [math.cos(angle), math.sin(angle)]
-            # Move the AI near the ball once the ball is hit, make sure the AI can't cross the the line
-            if self.racquet.y < HEIGHT // 2 - self.racquet.height and self.ball.y < (HEIGHT // 2 - self.ball.radius) + 100:
-                self.move()
-            elif self.ball.y < HEIGHT // 2 - self.ball.radius:
-                self.racquet.y -= self.racquet.speed * abs(self.direction[1])
-        else:
-            self.move_towards_middle()
+        angle = math.atan2(self.ball.y - self.racquet.y, self.ball.x - self.racquet.x)
+        self.direction = [math.cos(angle), math.sin(angle)]
+        # Move the AI near the ball once the ball is hit, make sure the AI can't cross the the line
+        if self.racquet.y < HEIGHT // 2 - self.racquet.height and self.ball.y < (HEIGHT // 2 - self.ball.radius) + 100:
+            self.move()
+        elif self.ball.y < HEIGHT // 2 - self.ball.radius:
+            self.racquet.y -= self.racquet.speed * abs(self.direction[1])
     def move_towards_middle(self):
         target_x = WIDTH // 2  - (.5 * self.racquet.width)
         target_y = 100 + (-.5 * self.racquet.height)
-        if self.ball.direction[1] > 0:
-            if (self.racquet.x <= target_x + 5 and self.racquet.x >= target_x - 5) and (self.racquet.y <= target_y + 5 and self.racquet.y >= target_y - 5):
-                self.racquet.x = target_x
-                self.racquet.y = target_y
-                self.direction = [0,0]
-            else:  
-                 # Move towards the top middle of the screen
-                angle = math.atan2(target_y - self.racquet.y, target_x - self.racquet.x)
-                self.direction = [math.cos(angle), math.sin(angle)]
-                self.move()
+        if (self.racquet.x <= target_x + 5 and self.racquet.x >= target_x - 5) and (self.racquet.y <= target_y + 5 and self.racquet.y >= target_y - 5):
+            self.racquet.x = target_x
+            self.racquet.y = target_y
+            self.direction = [0,0]
+        else:  
+             # Move towards the top middle of the screen
+            angle = math.atan2(target_y - self.racquet.y, target_x - self.racquet.x)
+            self.direction = [math.cos(angle), math.sin(angle)]
+            self.move()
+    
     def random_hit(self):
         click_x = random.uniform(self.box.left - self.error, self.box.right + self.error)
         click_y = random.uniform(self.box.top - self.error, self.box.bottom + self.error)
-        
+        self.out_func(click_x, click_y)
+
+    def update(self, ball_state):
+        self.fsm.process(ball_state)
 
 
-    
-        
-
-    
 
 class Game:
     def __init__(self, width, height):
@@ -141,21 +160,22 @@ class Game:
         self.yellow_box = None
         self.collide = False
         self.current = None
+        self.ball_state = "serving"
 
-        # Define designated boxes for each player
+        # Define designated placement boxes for each player
         self.ai_box = pygame.Rect(self.WIDTH// 4, self.HEIGHT// 2 , self.WIDTH// 2, self.court_height // 2)
         self.player_box = pygame.Rect(self.WIDTH // 4, 100, self.WIDTH // 2, self.court_height // 2)
 
         self.ball = Ball(width // 2, height // 2, BALL_RADIUS, 5)
-        self.racquet_ai = Racquet(width // 2 - RACQUET_WIDTH // 2, 0, RACQUET_WIDTH, RACQUET_HEIGHT, 5.1)
-        self.ai_controller = AI(self.racquet_ai, self.ball, self.ai_box, 10)
+        self.racquet_ai = Racquet(width // 2 - RACQUET_WIDTH // 2, 100 - RACQUET_HEIGHT * .5, RACQUET_WIDTH, RACQUET_HEIGHT, 5)
+        self.ai_controller = AI(self.racquet_ai, self.ball, self.ai_box, 1, self.out)
 
-        self.racquet_player = Racquet(width // 2 - RACQUET_WIDTH // 2, height - RACQUET_HEIGHT, RACQUET_WIDTH, RACQUET_HEIGHT, 10)
+        self.racquet_player = Racquet(width // 2 - RACQUET_WIDTH // 2, height - RACQUET_HEIGHT * .5 - 100, RACQUET_WIDTH, RACQUET_HEIGHT, 10)
 
         self.score = [0, 0]
 
         # Delay variables
-        self.delaying = False
+        self.delaying = True
         self.delay_timer = 0
 
 
@@ -212,6 +232,7 @@ class Game:
         if keys[pygame.K_s] and self.racquet_player.y < self.HEIGHT - self.racquet_player.height:
             self.racquet_player.move_down()
 
+        # delay before each point
         if self.delaying:
             self.delay_timer += 1
             if self.delay_timer >= FPS * 2:  # 2 seconds delay
@@ -219,10 +240,8 @@ class Game:
                 self.delay_timer = 0
                 # Start moving the ball after the delay
                 self.ball.direction = [random.choice([.1, -.1, .2, -.2, .3, -.3, .4, -.4, -.5, .5]), random.choice([.1, -.1, .2, -.2, .3, -.3, .4, -.4, -.5, .5])]
-
         else:
-            self.ai_controller.move_towards_ball()  # Move the racquet_ai based on AI logic
-
+            # The hit box has been made, so ball should move towards it
             if self.yellow_box and self.collide:
         
                 # Move the ball towards the center of the yellow box
@@ -237,17 +256,26 @@ class Game:
 
             self.ball.move()
 
+            # Update the balls state
+            if self.ball.direction[1] < 0:
+                self.ball_state = "towards"
+            elif self.ball.direction[1] > 0:
+                self.ball_state = "away"
+            
+            # Move the racquet_ai based on AI logic
+            self.ai_controller.update(self.ball_state) 
+
             # Ball collisions with paddles
             if (
                 not self.delaying
                 and self.racquet_ai.x < self.ball.x < self.racquet_ai.x + self.racquet_ai.width
                 and self.racquet_ai.y < self.ball.y < self.racquet_ai.y + self.racquet_ai.height
             ):
-                # If the ball hits ai, stop the ball and wait for a click
+                # If the ball hits ai, change ball state to 
                 self.ball.direction = [0, 0]
+                self.ball_state = "ai hit"
                 self.collide = True
                 self.current = "ai"
-
             elif (
                 not self.delaying
                 and self.racquet_player.x < self.ball.x < self.racquet_player.x + self.racquet_player.width
@@ -255,6 +283,7 @@ class Game:
             ):
                 # If the ball hits player, stop the ball and wait for a click
                 self.ball.direction = [0, 0]
+                self.ball_state = "player hit"
                 self.collide = True
                 self.current = "player"
 
@@ -275,12 +304,14 @@ class Game:
 
     def reset_positions(self):
         self.racquet_ai.x = self.WIDTH // 2 - RACQUET_WIDTH // 2
-        self.racquet_ai.y = 0
+        self.racquet_ai.y = 100 - RACQUET_HEIGHT * .5
         self.racquet_player.x = self.WIDTH // 2 - RACQUET_WIDTH // 2
-        self.racquet_player.y = self.HEIGHT - RACQUET_HEIGHT
+        self.racquet_player.y = self.HEIGHT - RACQUET_HEIGHT * .5 - 100
         self.ball.x = self.WIDTH // 2
         self.ball.y = self.HEIGHT // 2
         self.ball.direction = [0, 0]  # Stop the ball initially
+        self.ball_state = "serving"
+        self.ai_controller.fsm.current_state = "middle moving"
 
         # Set a delay for 2 seconds
         self.delaying = True
@@ -315,24 +346,13 @@ class Game:
         pygame.display.flip()
 
     def run(self):
-        show_initial_frame = True
-        initial_frame_timer = 0
+
 
         while True:
             self.handle_events()
-
-            if show_initial_frame:
-                self.draw()
-                initial_frame_timer += 1
-
-                if initial_frame_timer >= FPS * 2:  # Pause for 2 seconds
-                    show_initial_frame = False
-                    initial_frame_timer = 0
-
-            else:
-                self.update()
-                self.draw()
-                self.clock.tick(FPS)
+            self.update()
+            self.draw()
+            self.clock.tick(FPS)
 
 if __name__ == "__main__":
     game = Game(WIDTH, HEIGHT)
