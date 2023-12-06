@@ -8,7 +8,7 @@ from fsm import FSM
 # Constants
 WIDTH, HEIGHT = 600, 800
 BALL_RADIUS = 8
-RACQUET_WIDTH, RACQUET_HEIGHT = 80, 80
+RACQUET_WIDTH, RACQUET_HEIGHT = 100, 100
 FPS = 60
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -20,11 +20,12 @@ class Ball:
         self.y = y
         self.radius = radius
         self.speed = speed
+        self.added_speed = 0
         self.direction = [random.choice([.1, -.1, .2, -.2, .3, -.3, .4, -.4, -.5, .5]), random.choice([.1, -.1, .2, -.2, .3, -.3, .4, -.4, -.5, .5])]
 
     def move(self):
-        self.x += self.speed * self.direction[0]
-        self.y += self.speed * self.direction[1]
+        self.x += (self.speed + self.added_speed) * self.direction[0]
+        self.y += (self.speed + self.added_speed) * self.direction[1]
     
     def move_towards(self, target_x, target_y):
         angle = math.atan2(target_y - self.y, target_x - self.x)
@@ -32,12 +33,13 @@ class Ball:
 
 
 class Racquet:
-    def __init__(self, x, y, width, height, speed):
+    def __init__(self, x, y, width, height, speed, power):
         self.x = x
         self.y = y
         self.width = width
         self.height = height
         self.speed = speed
+        self.power = power  # New attribute for racquet power
 
     def move_left(self):
         self.x -= self.speed
@@ -144,10 +146,11 @@ class Game:
         pygame.display.set_caption("Vertical Tennis Game")
 
         # Load player images and scale them down
-        self.ai_image = pygame.image.load("player1.png")
+        self.ai_image = pygame.image.load("AI.png")
+        self.ai_image = pygame.transform.flip(self.ai_image, False, True)
         self.ai_image = pygame.transform.scale(self.ai_image, (int(RACQUET_WIDTH * 7 / 8), int(RACQUET_HEIGHT * 7 / 8)))
 
-        self.player_image = pygame.image.load("player2.png")
+        self.player_image = pygame.image.load("player.png")
         self.player_image = pygame.transform.scale(self.player_image, (int(RACQUET_WIDTH * 7 / 8), int(RACQUET_HEIGHT * 7 / 8)))
 
         # Load background image (scaled down)
@@ -167,12 +170,14 @@ class Game:
         self.player_box = pygame.Rect(self.WIDTH // 4, 100, self.WIDTH // 2, self.court_height // 2)
 
         self.ball = Ball(width // 2, height // 2, BALL_RADIUS, 5)
-        self.racquet_ai = Racquet(width // 2 - RACQUET_WIDTH // 2, 100 - RACQUET_HEIGHT * .5, RACQUET_WIDTH, RACQUET_HEIGHT, 5)
-        self.ai_controller = AI(self.racquet_ai, self.ball, self.ai_box, 1, self.out)
+        self.racquet_ai = Racquet(width // 2 - RACQUET_WIDTH // 2, 100 - RACQUET_HEIGHT * .5, RACQUET_WIDTH, RACQUET_HEIGHT, 5, 0)
+        self.ai_controller = AI(self.racquet_ai, self.ball, self.ai_box, 10, self.out)
 
-        self.racquet_player = Racquet(width // 2 - RACQUET_WIDTH // 2, height - RACQUET_HEIGHT * .5 - 100, RACQUET_WIDTH, RACQUET_HEIGHT, 10)
+        self.racquet_player = Racquet(width // 2 - RACQUET_WIDTH // 2, height - RACQUET_HEIGHT * .5 - 100, RACQUET_WIDTH, RACQUET_HEIGHT, 10, 10)
 
-        self.score = [0, 0]
+        # Scores for the game and set
+        self.set = [0, 0]
+        self.current_game_scores = [0, 0]
 
         # Delay variables
         self.delaying = True
@@ -190,7 +195,12 @@ class Game:
 
     def out(self, x, y):
         if (self.current == "ai" and self.ai_box.collidepoint(x, y)) or (self.current == "player" and self.player_box.collidepoint(x, y)):
-            self.yellow_box = YellowBox(x, y, 20, 20, 30)
+            self.yellow_box = YellowBox(x, y, 20, 20, 5)
+            # Update ball speed based on the racquet power
+            if self.current == "ai":
+                self.ball.added_speed = self.racquet_ai.power
+            else:
+                self.ball.added_speed = self.racquet_player.power
         else:
             # Some altered/added code: yellow box is drawn, displaying its out
             self.yellow_box = YellowBox(x, y, 20, 20, 120)
@@ -201,9 +211,10 @@ class Game:
             pygame.time.delay(1000)
             self.yellow_box = None
             if self.current == "ai":
-                self.score[1] += 1
+                self.current_game_scores[1] += 1
             else:
-                self.score[0] += 1
+                self.current_game_scores[0] += 1
+            self.check_game_winner()
             self.reset_positions()
 
     def handle_events(self):
@@ -220,8 +231,6 @@ class Game:
 
     def update(self):
         keys = pygame.key.get_pressed()
-
-        
 
         if keys[pygame.K_a] and self.racquet_player.x > 0:
             self.racquet_player.move_left()
@@ -289,17 +298,55 @@ class Game:
 
             # Ball out of bounds
             if self.ball.y <= 0:
-                self.score[1] += 1
+                self.current_game_scores[1] += 1
+                self.check_game_winner()
                 self.reset_positions()
             elif self.ball.y >= self.HEIGHT - self.ball.radius:
-                self.score[0] += 1
+                self.current_game_scores[0] += 1
+                self.check_game_winner()
                 self.reset_positions()
             elif (self.ball.x <= 0 or self.ball.x >= self.WIDTH - self.ball.radius) and self.ball.y <= self.HEIGHT // 2 - self.ball.radius:
-                self.score[1] += 1
+                self.current_game_scores[1] += 1
+                self.check_game_winner()
                 self.reset_positions()
             elif (self.ball.x <= 0 or self.ball.x >= self.WIDTH - self.ball.radius) and self.ball.y >= HEIGHT // 2 - self.ball.radius:
-                self.score[0] += 1
+                self.current_game_scores[0] += 1
+                self.check_game_winner()
                 self.reset_positions()
+
+    def check_game_winner(self):
+        # Check if a game in the set is won
+        if max(self.current_game_scores) >= 4:
+            # Update the total game scores and reset the current game scores
+            if self.current_game_scores[0] > self.current_game_scores[1]:
+                self.set[0] += 1
+                self.current_game_scores[0] = 0
+                self.current_game_scores[1] = 0
+            else:
+                self.set[1] += 1
+                self.current_game_scores[0] = 0
+                self.current_game_scores[1] = 0
+
+            if max(self.set) >= 6:
+                 # Fill the screen with a background color
+                self.screen.fill(BLACK)
+
+                # Display the winner and quit the application
+                if self.set.index(max(self.set)) == 0:
+                    winner_text = f"The AI is the winner!"
+                else:
+                    winner_text = f"You are the winner!"
+
+                winner_font = pygame.font.Font(None, 72)
+                winner_surface = winner_font.render(winner_text, True, WHITE)
+                self.screen.blit(winner_surface, (self.WIDTH // 2 - winner_surface.get_width() // 2, self.HEIGHT // 2 - winner_surface.get_height() // 2))
+                pygame.display.flip()
+                pygame.time.delay(3000)  # Display the winner for 3 seconds
+                pygame.quit()
+                sys.exit()
+
+            self.reset_positions()
+
             
 
     def reset_positions(self):
@@ -310,8 +357,10 @@ class Game:
         self.ball.x = self.WIDTH // 2
         self.ball.y = self.HEIGHT // 2
         self.ball.direction = [0, 0]  # Stop the ball initially
+        self.current = None
         self.ball_state = "serving"
         self.ai_controller.fsm.current_state = "middle moving"
+        self.ball.added_speed = 0
 
         # Set a delay for 2 seconds
         self.delaying = True
@@ -332,22 +381,28 @@ class Game:
         self.screen.blit(self.player_image, (self.racquet_player.x, self.racquet_player.y))
         pygame.draw.circle(self.screen, WHITE, (int(self.ball.x), int(self.ball.y)), self.ball.radius)
 
-        # Draw the score
-        score_text = self.font.render(f"{self.score[0]} - {self.score[1]}", True, WHITE)
-        self.screen.blit(score_text, (self.WIDTH // 2 - score_text.get_width() // 2, 20))
+        # Draw the game and set scores
+        total_score_text = self.font.render(f"{self.set[0]} - {self.set[1]}", True, WHITE)
+        self.screen.blit(total_score_text, (self.WIDTH // 2 - total_score_text.get_width() // 2, 20))
+
+        # Draw the current game scores
+        tennis_scores = {0: "0", 1: "15", 2: "30", 3: "40"}
+        player1_tennis_score = tennis_scores[self.current_game_scores[0]]
+        player2_tennis_score = tennis_scores[self.current_game_scores[1]]
+
+
+        game_score_text = self.font.render(f"{player1_tennis_score} - {player2_tennis_score}", True, WHITE)
+        self.screen.blit(game_score_text, (self.WIDTH // 2 - game_score_text.get_width() // 2, 50))
+
 
         # Draw the yellow box if it exists
         if self.yellow_box:
             self.yellow_box.draw(self.screen)
 
-
-
         # Update the display
         pygame.display.flip()
 
     def run(self):
-
-
         while True:
             self.handle_events()
             self.update()
