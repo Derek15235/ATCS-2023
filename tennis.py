@@ -39,7 +39,7 @@ class Racquet:
         self.width = width
         self.height = height
         self.speed = speed
-        self.power = power  # New attribute for racquet power
+        self.power = power
 
     def move_left(self):
         self.x -= self.speed
@@ -96,6 +96,7 @@ class AI:
         self.fsm.add_transition("ai hit", "to ball", self.random_hit, "middle moving")
         self.fsm.add_transition("player hit", "middle moving", self.move_towards_middle)
 
+
         
 
     # Basic function for moving the AI
@@ -136,7 +137,7 @@ class AI:
 
 
 class Game:
-    def __init__(self, width, height):
+    def __init__(self, width, height, player_speed, ai_speed, player_power, ai_power, ai_margin):
         pygame.init()
         self.WIDTH = width
         self.HEIGHT = height
@@ -164,16 +165,17 @@ class Game:
         self.collide = False
         self.current = None
         self.ball_state = "serving"
+        self.player_hit_timer = 0
 
         # Define designated placement boxes for each player
         self.ai_box = pygame.Rect(self.WIDTH// 4, self.HEIGHT// 2 , self.WIDTH// 2, self.court_height // 2)
         self.player_box = pygame.Rect(self.WIDTH // 4, 100, self.WIDTH // 2, self.court_height // 2)
 
         self.ball = Ball(width // 2, height // 2, BALL_RADIUS, 5)
-        self.racquet_ai = Racquet(width // 2 - RACQUET_WIDTH // 2, 100 - RACQUET_HEIGHT * .5, RACQUET_WIDTH, RACQUET_HEIGHT, 5, 0)
-        self.ai_controller = AI(self.racquet_ai, self.ball, self.ai_box, 10, self.out)
+        self.racquet_ai = Racquet(width // 2 - RACQUET_WIDTH // 2, 100 - RACQUET_HEIGHT * .5, RACQUET_WIDTH, RACQUET_HEIGHT, ai_speed, ai_power)
+        self.ai_controller = AI(self.racquet_ai, self.ball, self.ai_box, ai_margin, self.out)
 
-        self.racquet_player = Racquet(width // 2 - RACQUET_WIDTH // 2, height - RACQUET_HEIGHT * .5 - 100, RACQUET_WIDTH, RACQUET_HEIGHT, 10, 10)
+        self.racquet_player = Racquet(width // 2 - RACQUET_WIDTH // 2, height - RACQUET_HEIGHT * .5 - 100, RACQUET_WIDTH, RACQUET_HEIGHT, player_speed, player_power)
 
         # Scores for the game and set
         self.set = [0, 0]
@@ -195,7 +197,7 @@ class Game:
 
     def out(self, x, y):
         if (self.current == "ai" and self.ai_box.collidepoint(x, y)) or (self.current == "player" and self.player_box.collidepoint(x, y)):
-            self.yellow_box = YellowBox(x, y, 20, 20, 5)
+            self.yellow_box = YellowBox(x, y, 20, 20, 20)
             # Update ball speed based on the racquet power
             if self.current == "ai":
                 self.ball.added_speed = self.racquet_ai.power
@@ -222,24 +224,25 @@ class Game:
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            elif event.type == pygame.MOUSEBUTTONDOWN and self.yellow_box is None and self.collide:
+            elif event.type == pygame.MOUSEBUTTONDOWN and self.yellow_box is None and self.collide and self.current == "player":
                 # Create a yellow box at the mouse click position
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 self.out(mouse_x, mouse_y)
-
+                self.player_hit_timer = 0
                 
 
     def update(self):
         keys = pygame.key.get_pressed()
 
-        if keys[pygame.K_a] and self.racquet_player.x > 0:
-            self.racquet_player.move_left()
-        if keys[pygame.K_d] and self.racquet_player.x < self.WIDTH - self.racquet_player.width:
-            self.racquet_player.move_right()
-        if keys[pygame.K_w] and self.racquet_player.y > self.HEIGHT // 2:
-            self.racquet_player.move_up()
-        if keys[pygame.K_s] and self.racquet_player.y < self.HEIGHT - self.racquet_player.height:
-            self.racquet_player.move_down()
+        if not self.delaying:
+            if keys[pygame.K_a] and self.racquet_player.x > 0: 
+                self.racquet_player.move_left()
+            if keys[pygame.K_d] and self.racquet_player.x < self.WIDTH - self.racquet_player.width:
+                self.racquet_player.move_right()
+            if keys[pygame.K_w] and self.racquet_player.y > self.HEIGHT // 2:
+                self.racquet_player.move_up()
+            if keys[pygame.K_s] and self.racquet_player.y < self.HEIGHT - self.racquet_player.height:
+                self.racquet_player.move_down()
 
         # delay before each point
         if self.delaying:
@@ -250,6 +253,13 @@ class Game:
                 # Start moving the ball after the delay
                 self.ball.direction = [random.choice([.1, -.1, .2, -.2, .3, -.3, .4, -.4, -.5, .5]), random.choice([.1, -.1, .2, -.2, .3, -.3, .4, -.4, -.5, .5])]
         else:
+            if self.ball_state == "player hit":
+                self.player_hit_timer += 1
+                if self.player_hit_timer >= FPS - 30:  # .5 seconds
+                    self.current_game_scores[0] += 1
+                    self.check_game_winner()
+                    self.reset_positions()
+
             # The hit box has been made, so ball should move towards it
             if self.yellow_box and self.collide:
         
@@ -276,7 +286,7 @@ class Game:
 
             # Ball collisions with paddles
             if (
-                not self.delaying
+                not self.yellow_box
                 and self.racquet_ai.x < self.ball.x < self.racquet_ai.x + self.racquet_ai.width
                 and self.racquet_ai.y < self.ball.y < self.racquet_ai.y + self.racquet_ai.height
             ):
@@ -286,7 +296,7 @@ class Game:
                 self.collide = True
                 self.current = "ai"
             elif (
-                not self.delaying
+                not self.yellow_box
                 and self.racquet_player.x < self.ball.x < self.racquet_player.x + self.racquet_player.width
                 and self.racquet_player.y < self.ball.y < self.racquet_player.y + self.racquet_player.height
             ):
@@ -327,7 +337,7 @@ class Game:
                 self.current_game_scores[0] = 0
                 self.current_game_scores[1] = 0
 
-            if max(self.set) >= 6:
+            if max(self.set) >= 1:
                  # Fill the screen with a background color
                 self.screen.fill(BLACK)
 
@@ -343,7 +353,8 @@ class Game:
                 pygame.display.flip()
                 pygame.time.delay(3000)  # Display the winner for 3 seconds
                 pygame.quit()
-                sys.exit()
+                new_game = Game(self.WIDTH, self.HEIGHT, player_speed=self.racquet_player.speed, ai_speed=self.racquet_ai.speed*2, player_power=self.racquet_player.power, ai_power=self.racquet_ai.power+3, ai_margin=self.ai_controller.error - 10)
+                new_game.run()
 
             self.reset_positions()
 
@@ -361,6 +372,7 @@ class Game:
         self.ball_state = "serving"
         self.ai_controller.fsm.current_state = "middle moving"
         self.ball.added_speed = 0
+        self.player_hit_timer = 0  # Reset the player hit timer when resetting positions
 
         # Set a delay for 2 seconds
         self.delaying = True
@@ -410,6 +422,6 @@ class Game:
             self.clock.tick(FPS)
 
 if __name__ == "__main__":
-    game = Game(WIDTH, HEIGHT)
+    game = Game(WIDTH, HEIGHT, player_speed=5, ai_speed=5, player_power=4, ai_power=.5, ai_margin=50)
     game.run()
 
