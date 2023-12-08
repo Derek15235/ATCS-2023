@@ -70,7 +70,8 @@ class YellowBox:
         return self.timer >= self.duration
     
 class AI:
-    def __init__(self, racquet, ball, box, error, out_func):
+    def __init__(self, name, racquet, ball, box, error, out_func):
+        self.name = name
         self.racquet = racquet
         self.ball = ball
         self.box = box
@@ -137,7 +138,7 @@ class AI:
 
 
 class Game:
-    def __init__(self, width, height, player_speed, ai_speed, player_power, ai_power, ai_margin):
+    def __init__(self, width, height, player_speed, ai_speed, player_power, ai_power, ai_margin, game_number=1, total_scores={"AI":0, "player":0}):
         pygame.init()
         self.WIDTH = width
         self.HEIGHT = height
@@ -166,6 +167,7 @@ class Game:
         self.current = None
         self.ball_state = "serving"
         self.player_hit_timer = 0
+        self.total_scores = total_scores
 
         # Define designated placement boxes for each player
         self.ai_box = pygame.Rect(self.WIDTH// 4, self.HEIGHT// 2 , self.WIDTH// 2, self.court_height // 2)
@@ -173,7 +175,18 @@ class Game:
 
         self.ball = Ball(width // 2, height // 2, BALL_RADIUS, 5)
         self.racquet_ai = Racquet(width // 2 - RACQUET_WIDTH // 2, 100 - RACQUET_HEIGHT * .5, RACQUET_WIDTH, RACQUET_HEIGHT, ai_speed, ai_power)
-        self.ai_controller = AI(self.racquet_ai, self.ball, self.ai_box, ai_margin, self.out)
+        self.game_number = game_number
+        if self.game_number == 1:
+            name = "Arjun"
+        elif self.game_number == 2:
+            name = "Raul"
+        elif self.game_number == 3:
+            name = "Octave"
+        elif self.game_number == 4:
+            name = "Arki"
+        elif self.game_number == 5:
+            name = "Yuanye"
+        self.ai_controller = AI(name, self.racquet_ai, self.ball, self.ai_box, ai_margin, self.out)
 
         self.racquet_player = Racquet(width // 2 - RACQUET_WIDTH // 2, height - RACQUET_HEIGHT * .5 - 100, RACQUET_WIDTH, RACQUET_HEIGHT, player_speed, player_power)
 
@@ -212,10 +225,13 @@ class Game:
             pygame.display.flip()
             pygame.time.delay(1000)
             self.yellow_box = None
+            # If the player clicks out of bounds, then they have "missed"
             if self.current == "ai":
                 self.current_game_scores[1] += 1
+                self.total_scores["player"] += 1
             else:
                 self.current_game_scores[0] += 1
+                self.total_scores["AI"] += 1
             self.check_game_winner()
             self.reset_positions()
 
@@ -257,6 +273,7 @@ class Game:
                 self.player_hit_timer += 1
                 if self.player_hit_timer >= FPS - 30:  # .5 seconds
                     self.current_game_scores[0] += 1
+                    self.total_scores["AI"] += 1
                     self.check_game_winner()
                     self.reset_positions()
 
@@ -309,18 +326,22 @@ class Game:
             # Ball out of bounds
             if self.ball.y <= 0:
                 self.current_game_scores[1] += 1
+                self.total_scores["player"] += 1
                 self.check_game_winner()
                 self.reset_positions()
             elif self.ball.y >= self.HEIGHT - self.ball.radius:
                 self.current_game_scores[0] += 1
+                self.total_scores["AI"] += 1
                 self.check_game_winner()
                 self.reset_positions()
             elif (self.ball.x <= 0 or self.ball.x >= self.WIDTH - self.ball.radius) and self.ball.y <= self.HEIGHT // 2 - self.ball.radius:
                 self.current_game_scores[1] += 1
+                self.total_scores["player"] += 1
                 self.check_game_winner()
                 self.reset_positions()
             elif (self.ball.x <= 0 or self.ball.x >= self.WIDTH - self.ball.radius) and self.ball.y >= HEIGHT // 2 - self.ball.radius:
                 self.current_game_scores[0] += 1
+                self.total_scores["AI"] += 1
                 self.check_game_winner()
                 self.reset_positions()
 
@@ -332,18 +353,20 @@ class Game:
                 self.set[0] += 1
                 self.current_game_scores[0] = 0
                 self.current_game_scores[1] = 0
+                print(self.total_scores)
             else:
                 self.set[1] += 1
                 self.current_game_scores[0] = 0
                 self.current_game_scores[1] = 0
+                print(self.total_scores)
 
             if max(self.set) >= 1:
                  # Fill the screen with a background color
                 self.screen.fill(BLACK)
 
-                # Display the winner and quit the application
+                # Display the winner and quit thew application
                 if self.set.index(max(self.set)) == 0:
-                    winner_text = f"The AI is the winner!"
+                    winner_text = f"{self.ai_controller.name} is the winner!"
                 else:
                     winner_text = f"You are the winner!"
 
@@ -352,9 +375,34 @@ class Game:
                 self.screen.blit(winner_surface, (self.WIDTH // 2 - winner_surface.get_width() // 2, self.HEIGHT // 2 - winner_surface.get_height() // 2))
                 pygame.display.flip()
                 pygame.time.delay(3000)  # Display the winner for 3 seconds
-                pygame.quit()
-                new_game = Game(self.WIDTH, self.HEIGHT, player_speed=self.racquet_player.speed, ai_speed=self.racquet_ai.speed*2, player_power=self.racquet_player.power, ai_power=self.racquet_ai.power+3, ai_margin=self.ai_controller.error - 10)
-                new_game.run()
+                
+                # If you have played the total amount of matches needed to be evaluated, write in results + percentage of points won
+                if self.game_number == 2:
+                    self.screen.fill(BLACK)
+                    percentage = 100.0 * (float(self.total_scores["player"]) / float(self.total_scores["AI"] + self.total_scores["player"]))
+                    if self.total_scores["AI"] >= self.total_scores["player"]:
+                        result_text = "You did not make Varsity!"
+                    else:
+                        result_text = "You made the team!"
+
+                    # Displayt the result on the screen
+                    result_font = pygame.font.Font(None, 65)
+                    result_surface = result_font.render(result_text, True, WHITE)
+                    self.screen.blit(result_surface, (self.WIDTH // 2 - result_surface.get_width() // 2, self.HEIGHT // 2 - result_surface.get_height() // 2))
+                   
+                    # Display the percentage text below the result text
+                    percentage_text = f"Success Percentage: {percentage:.2f}%"
+                    percentage_font = pygame.font.Font(None, 30)
+                    percentage_surface = percentage_font.render(percentage_text, True, WHITE)
+                    self.screen.blit(percentage_surface, (self.WIDTH // 2 - percentage_surface.get_width() // 2, self.HEIGHT // 2 + result_surface.get_height() // 2 + 10))
+
+                    pygame.display.flip()
+                    pygame.time.delay(3000)
+                    sys.exit()
+                else:
+                    pygame.quit()
+                    new_game = Game(self.WIDTH, self.HEIGHT, player_speed=self.racquet_player.speed, ai_speed=self.racquet_ai.speed + 3, player_power=self.racquet_player.power, ai_power=self.racquet_ai.power+2, ai_margin=self.ai_controller.error // 2, game_number=self.game_number + 1, total_scores=self.total_scores)
+                    new_game.run()
 
             self.reset_positions()
 
