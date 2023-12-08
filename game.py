@@ -2,7 +2,11 @@
 import pygame
 import sys
 import random
-import math
+from ai_opponent import AI
+from ball import Ball
+from hit_box import HitBox
+from racquet import Racquet
+
 from fsm import FSM
 
 # Constants
@@ -13,129 +17,6 @@ FPS = 60
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 YELLOW = (255, 255, 0)
-
-class Ball:
-    def __init__(self, x, y, radius, speed):
-        self.x = x
-        self.y = y
-        self.radius = radius
-        self.speed = speed
-        self.added_speed = 0
-        self.direction = [random.choice([.1, -.1, .2, -.2, .3, -.3, .4, -.4, -.5, .5]), random.choice([.1, -.1, .2, -.2, .3, -.3, .4, -.4, -.5, .5])]
-
-    def move(self):
-        self.x += (self.speed + self.added_speed) * self.direction[0]
-        self.y += (self.speed + self.added_speed) * self.direction[1]
-    
-    def move_towards(self, target_x, target_y):
-        angle = math.atan2(target_y - self.y, target_x - self.x)
-        self.direction = [math.cos(angle), math.sin(angle)]
-
-
-class Racquet:
-    def __init__(self, x, y, width, height, speed, power):
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.speed = speed
-        self.power = power
-
-    def move_left(self):
-        self.x -= self.speed
-
-    def move_right(self):
-        self.x += self.speed
-
-    def move_up(self):
-        self.y -= self.speed
-
-    def move_down(self):
-        self.y += self.speed
-
-class YellowBox:
-    def __init__(self, x, y, width, height, duration):
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.duration = duration
-        self.timer = 0
-
-    def draw(self, screen):
-        pygame.draw.rect(screen, YELLOW, (self.x, self.y, self.width, self.height))
-
-    def update(self):
-        self.timer += 1
-        return self.timer >= self.duration
-    
-class AI:
-    def __init__(self, name, racquet, ball, box, error, out_func):
-        self.name = name
-        self.racquet = racquet
-        self.ball = ball
-        self.box = box
-        self.error = error
-        self.out_func = out_func
-
-        self.fsm = FSM("middle moving")
-        self.init_fsm()
-    
-    def init_fsm(self):
-        # Ball moving towards ai
-        self.fsm.add_transition("towards", "to ball", self.move_towards_ball)
-        self.fsm.add_transition("towards", "middle moving", self.move_towards_ball, "to ball")
-
-        # Ball moving away from ai
-        self.fsm.add_transition("away", "hit ball", self.move_towards_middle, "middle moving")
-        self.fsm.add_transition("away", "middle moving", self.move_towards_middle)
-
-        self.fsm.add_transition("serving", "middle moving", self.move_towards_middle)
-
-
-        # ai hits ball, then starts go back to middle
-        self.fsm.add_transition("ai hit", "to ball", self.random_hit, "middle moving")
-        self.fsm.add_transition("player hit", "middle moving", self.move_towards_middle)
-
-
-        
-
-    # Basic function for moving the AI
-    def move(self):
-        self.racquet.x += self.racquet.speed * self.direction[0]
-        self.racquet.y += self.racquet.speed * self.direction[1]
-        
-
-    def move_towards_ball(self):
-        angle = math.atan2(self.ball.y - self.racquet.y, self.ball.x - self.racquet.x)
-        self.direction = [math.cos(angle), math.sin(angle)]
-        # Move the AI near the ball once the ball is hit, make sure the AI can't cross the the line
-        if self.racquet.y < HEIGHT // 2 - self.racquet.height and self.ball.y < (HEIGHT // 2 - self.ball.radius) + 100:
-            self.move()
-        elif self.ball.y < HEIGHT // 2 - self.ball.radius:
-            self.racquet.y -= self.racquet.speed * abs(self.direction[1])
-    def move_towards_middle(self):
-        target_x = WIDTH // 2  - (.5 * self.racquet.width)
-        target_y = 100 + (-.5 * self.racquet.height)
-        if (self.racquet.x <= target_x + 5 and self.racquet.x >= target_x - 5) and (self.racquet.y <= target_y + 5 and self.racquet.y >= target_y - 5):
-            self.racquet.x = target_x
-            self.racquet.y = target_y
-            self.direction = [0,0]
-        else:  
-             # Move towards the top middle of the screen
-            angle = math.atan2(target_y - self.racquet.y, target_x - self.racquet.x)
-            self.direction = [math.cos(angle), math.sin(angle)]
-            self.move()
-    
-    def random_hit(self):
-        click_x = random.uniform(self.box.left - self.error, self.box.right + self.error)
-        click_y = random.uniform(self.box.top - self.error, self.box.bottom + self.error)
-        self.out_func(click_x, click_y)
-
-    def update(self, ball_state):
-        self.fsm.process(ball_state)
-
-
 
 class Game:
     def __init__(self, width, height, player_speed, ai_speed, player_power, ai_power, ai_margin, game_number=1, total_scores={"AI":0, "player":0}):
@@ -162,7 +43,7 @@ class Game:
         self.background.blit(background_original, (100, 100))
 
         self.clock = pygame.time.Clock()
-        self.yellow_box = None
+        self.hit_box = None
         self.collide = False
         self.current = None
         self.ball_state = "serving"
@@ -210,21 +91,21 @@ class Game:
 
     def out(self, x, y):
         if (self.current == "ai" and self.ai_box.collidepoint(x, y)) or (self.current == "player" and self.player_box.collidepoint(x, y)):
-            self.yellow_box = YellowBox(x, y, 20, 20, 20)
+            self.hit_box = HitBox(x, y, 20, 20, 20)
             # Update ball speed based on the racquet power
             if self.current == "ai":
                 self.ball.added_speed = self.racquet_ai.power
             else:
                 self.ball.added_speed = self.racquet_player.power
         else:
-            # Some altered/added code: yellow box is drawn, displaying its out
-            self.yellow_box = YellowBox(x, y, 20, 20, 120)
-            self.yellow_box.draw(self.screen)
+            # Some altered/added code: hit box is drawn, displaying its out
+            self.hit_box = HitBox(x, y, 20, 20, 120)
+            self.hit_box.draw(self.screen)
             out_text = self.out_font.render("OUT", True, WHITE)
             self.screen.blit(out_text, (self.WIDTH // 2 - out_text.get_width() // 2, self.HEIGHT // 2 - out_text.get_height() // 2))
             pygame.display.flip()
             pygame.time.delay(1000)
-            self.yellow_box = None
+            self.hit_box = None
             # If the player clicks out of bounds, then they have "missed"
             if self.current == "ai":
                 self.current_game_scores[1] += 1
@@ -240,8 +121,8 @@ class Game:
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            elif event.type == pygame.MOUSEBUTTONDOWN and self.yellow_box is None and self.collide and self.current == "player":
-                # Create a yellow box at the mouse click position
+            elif event.type == pygame.MOUSEBUTTONDOWN and self.hit_box is None and self.collide and self.current == "player":
+                # Create a hit box at the mouse click position
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 self.out(mouse_x, mouse_y)
                 self.player_hit_timer = 0
@@ -278,17 +159,17 @@ class Game:
                     self.reset_positions()
 
             # The hit box has been made, so ball should move towards it
-            if self.yellow_box and self.collide:
+            if self.hit_box and self.collide:
         
-                # Move the ball towards the center of the yellow box
-                self.ball.move_towards(self.yellow_box.x + self.yellow_box.width / 2,
-                                        self.yellow_box.y + self.yellow_box.height / 2)
+                # Move the ball towards the center of the hit box
+                self.ball.move_towards(self.hit_box.x + self.hit_box.width / 2,
+                                        self.hit_box.y + self.hit_box.height / 2)
 
                 self.collide = False
 
             # Update and check if the yellow box duration has expired
-            if self.yellow_box and self.yellow_box.update():
-                self.yellow_box = None
+            if self.hit_box and self.hit_box.update():
+                self.hit_box = None
 
             self.ball.move()
 
@@ -303,7 +184,7 @@ class Game:
 
             # Ball collisions with paddles
             if (
-                not self.yellow_box
+                not self.hit_box
                 and self.racquet_ai.x < self.ball.x < self.racquet_ai.x + self.racquet_ai.width
                 and self.racquet_ai.y < self.ball.y < self.racquet_ai.y + self.racquet_ai.height
             ):
@@ -313,7 +194,7 @@ class Game:
                 self.collide = True
                 self.current = "ai"
             elif (
-                not self.yellow_box
+                not self.hit_box
                 and self.racquet_player.x < self.ball.x < self.racquet_player.x + self.racquet_player.width
                 and self.racquet_player.y < self.ball.y < self.racquet_player.y + self.racquet_player.height
             ):
@@ -456,8 +337,8 @@ class Game:
 
 
         # Draw the yellow box if it exists
-        if self.yellow_box:
-            self.yellow_box.draw(self.screen)
+        if self.hit_box:
+            self.hit_box.draw(self.screen)
 
         # Update the display
         pygame.display.flip()
