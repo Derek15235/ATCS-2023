@@ -7,8 +7,6 @@ from ball import Ball
 from hit_box import HitBox
 from racquet import Racquet
 
-from fsm import FSM
-
 # Constants
 WIDTH, HEIGHT = 600, 800
 BALL_RADIUS = 8
@@ -16,7 +14,9 @@ RACQUET_WIDTH, RACQUET_HEIGHT = 100, 100
 FPS = 60
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-YELLOW = (255, 255, 0)
+SPEED_INCREASE = 2
+POWER_INCREASE = 2
+ERROR_DECREASE = 1.5
 
 class Game:
     def __init__(self, width, height, player_speed, ai_speed, player_power, ai_power, ai_margin, game_number=1, total_scores={"AI":0, "player":0}):
@@ -56,18 +56,20 @@ class Game:
 
         self.ball = Ball(width // 2, height // 2, BALL_RADIUS, 5)
         self.racquet_ai = Racquet(width // 2 - RACQUET_WIDTH // 2, 100 - RACQUET_HEIGHT * .5, RACQUET_WIDTH, RACQUET_HEIGHT, ai_speed, ai_power)
+        # Change AI look based on current game/stage on
         self.game_number = game_number
         if self.game_number == 1:
-            name = "Arjun"
+            self.name = "Alex"
         elif self.game_number == 2:
-            name = "Raul"
+            self.name = "Ralph"
         elif self.game_number == 3:
-            name = "Octave"
+            self.name = "Octave"
         elif self.game_number == 4:
-            name = "Arki"
+            self.name = "Adam"
         elif self.game_number == 5:
-            name = "Yuanye"
-        self.ai_controller = AI(name, self.racquet_ai, self.ball, self.ai_box, ai_margin, self.out)
+            self.name = "Yuri"
+
+        self.ai_controller = AI(self.name, self.racquet_ai, self.ball, self.ai_box, ai_margin, self.out)
 
         self.racquet_player = Racquet(width // 2 - RACQUET_WIDTH // 2, height - RACQUET_HEIGHT * .5 - 100, RACQUET_WIDTH, RACQUET_HEIGHT, player_speed, player_power)
 
@@ -234,12 +236,10 @@ class Game:
                 self.set[0] += 1
                 self.current_game_scores[0] = 0
                 self.current_game_scores[1] = 0
-                print(self.total_scores)
             else:
                 self.set[1] += 1
                 self.current_game_scores[0] = 0
                 self.current_game_scores[1] = 0
-                print(self.total_scores)
 
             if max(self.set) >= 1:
                  # Fill the screen with a background color
@@ -282,7 +282,7 @@ class Game:
                     sys.exit()
                 else:
                     pygame.quit()
-                    new_game = Game(self.WIDTH, self.HEIGHT, player_speed=self.racquet_player.speed, ai_speed=self.racquet_ai.speed + 3, player_power=self.racquet_player.power, ai_power=self.racquet_ai.power+2, ai_margin=self.ai_controller.error // 2, game_number=self.game_number + 1, total_scores=self.total_scores)
+                    new_game = Game(self.WIDTH, self.HEIGHT, player_speed=self.racquet_player.speed, ai_speed=self.racquet_ai.speed + SPEED_INCREASE, player_power=self.racquet_player.power, ai_power=self.racquet_ai.power + POWER_INCREASE, ai_margin=self.ai_controller.error // ERROR_DECREASE, game_number=self.game_number + 1, total_scores=self.total_scores)
                     new_game.run()
 
             self.reset_positions()
@@ -343,7 +343,24 @@ class Game:
         # Update the display
         pygame.display.flip()
 
+    def draw_start_screen(self, name):
+        self.screen.fill(BLACK)
+        opponent_name = name  # Replace with the appropriate opponent name
+        opponent_font = pygame.font.Font(None, 50)
+        opponent_surface = opponent_font.render(f"You are playing against {opponent_name}!", True, WHITE)
+        self.screen.blit(opponent_surface, (self.WIDTH // 2 - opponent_surface.get_width() // 2, self.HEIGHT // 2 - opponent_surface.get_height() // 2))
+        pygame.display.flip()
+
+        # Record the start time
+        start_time = pygame.time.get_ticks()
+
+        while pygame.time.get_ticks() - start_time < 3000:
+            # Keep updating the display during the delay
+            self.handle_events()
+            self.clock.tick(FPS)
+
     def run(self):
+        self.draw_start_screen(self.name)
         while True:
             self.handle_events()
             self.update()
