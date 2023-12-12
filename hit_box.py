@@ -20,3 +20,5 @@ class HitBox:
     def update(self):
         self.timer += 1
         return self.timer >= self.duration
+
+# End of ChatGPT code

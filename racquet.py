@@ -20,3 +20,5 @@ class Racquet:
 
     def move_down(self):
         self.y += self.speed
+
+# End of ChatGPT code

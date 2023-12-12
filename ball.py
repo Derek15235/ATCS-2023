@@ -20,3 +20,5 @@ class Ball:
     def move_towards(self, target_x, target_y):
         angle = math.atan2(target_y - self.y, target_x - self.x)
         self.direction = [math.cos(angle), math.sin(angle)]
+
+# end of ChatGPT code
