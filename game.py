@@ -29,15 +29,15 @@ class Game:
         pygame.display.set_caption("Road to Varsity")
 
         # Load player images and scale them down
-        self.ai_image = pygame.image.load("AI.png")
+        self.ai_image = pygame.image.load("assets/AI.png")
         self.ai_image = pygame.transform.flip(self.ai_image, False, True)
         self.ai_image = pygame.transform.scale(self.ai_image, (int(RACQUET_WIDTH * 7 / 8), int(RACQUET_HEIGHT * 7 / 8)))
 
-        self.player_image = pygame.image.load("player.png")
+        self.player_image = pygame.image.load("assets/player.png")
         self.player_image = pygame.transform.scale(self.player_image, (int(RACQUET_WIDTH * 7 / 8), int(RACQUET_HEIGHT * 7 / 8)))
 
         # Load background image (scaled down)
-        background_original = pygame.image.load("tennis_court.png")
+        background_original = pygame.image.load("assets/tennis_court.png")
         background_original = pygame.transform.scale(background_original, (self.court_width, self.court_height))
         self.background = pygame.Surface((WIDTH, HEIGHT))
         self.background.blit(background_original, (100, 100))
