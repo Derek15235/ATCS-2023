@@ -243,7 +243,7 @@ class Game:
                 self.current_game_scores[1] = 0
 
             # If a person reaches 6 games, the set ends (adjust this for the matches to go faster)
-            if max(self.set) >= 6:
+            if max(self.set) >= 2:
                  # Fill the screen with a background color
                 self.screen.fill(BLACK)
 
@@ -260,7 +260,7 @@ class Game:
                 pygame.time.delay(3000)  # Display the winner for 3 seconds
                 
                 # If you have played the total amount of matches needed to be evaluated, write in results + percentage of points won
-                if self.game_number == 5:
+                if self.game_number == 3:
                     self.screen.fill(BLACK)
                     percentage = 100.0 * (float(self.total_scores["player"]) / float(self.total_scores["AI"] + self.total_scores["player"]))
                     if self.total_scores["AI"] >= self.total_scores["player"]:
@@ -370,7 +370,7 @@ class Game:
             self.clock.tick(FPS)
 
 if __name__ == "__main__":
-    game = Game(WIDTH, HEIGHT, player_speed=10, ai_speed=5, player_power=8, ai_power=.5, ai_margin=40)
+    game = Game(WIDTH, HEIGHT, player_speed=5, ai_speed=5, player_power=5, ai_power=.5, ai_margin=40)
     game.run()
 
 # End of ChatGPT code
