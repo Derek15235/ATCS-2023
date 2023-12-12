@@ -26,7 +26,7 @@ class Game:
         self.court_width = width - 200
         self.court_height = height - 200
         self.screen = pygame.display.set_mode((width, height))
-        pygame.display.set_caption("Vertical Tennis Game")
+        pygame.display.set_caption("Road to Varsity")
 
         # Load player images and scale them down
         self.ai_image = pygame.image.load("AI.png")
@@ -133,6 +133,7 @@ class Game:
     def update(self):
         keys = pygame.key.get_pressed()
 
+        # Player movements
         if not self.delaying:
             if keys[pygame.K_a] and self.racquet_player.x > 0: 
                 self.racquet_player.move_left()
@@ -143,7 +144,7 @@ class Game:
             if keys[pygame.K_s] and self.racquet_player.y < self.HEIGHT - self.racquet_player.height:
                 self.racquet_player.move_down()
 
-        # delay before each point
+        # Delay before each point
         if self.delaying:
             self.delay_timer += 1
             if self.delay_timer >= FPS * 2:  # 2 seconds delay
@@ -241,7 +242,8 @@ class Game:
                 self.current_game_scores[0] = 0
                 self.current_game_scores[1] = 0
 
-            if max(self.set) >= 1:
+            # If a person reaches 6 games, the set ends (adjust this for the matches to go faster)
+            if max(self.set) >= 6:
                  # Fill the screen with a background color
                 self.screen.fill(BLACK)
 
@@ -258,7 +260,7 @@ class Game:
                 pygame.time.delay(3000)  # Display the winner for 3 seconds
                 
                 # If you have played the total amount of matches needed to be evaluated, write in results + percentage of points won
-                if self.game_number == 2:
+                if self.game_number == 5:
                     self.screen.fill(BLACK)
                     percentage = 100.0 * (float(self.total_scores["player"]) / float(self.total_scores["AI"] + self.total_scores["player"]))
                     if self.total_scores["AI"] >= self.total_scores["player"]:
@@ -368,6 +370,6 @@ class Game:
             self.clock.tick(FPS)
 
 if __name__ == "__main__":
-    game = Game(WIDTH, HEIGHT, player_speed=5, ai_speed=5, player_power=4, ai_power=.5, ai_margin=50)
+    game = Game(WIDTH, HEIGHT, player_speed=5, ai_speed=5, player_power=4, ai_power=.5, ai_margin=40)
     game.run()
 

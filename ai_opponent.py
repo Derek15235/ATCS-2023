@@ -25,9 +25,9 @@ class AI:
         self.fsm.add_transition("towards", "middle moving", self.move_towards_ball, "to ball")
 
         # Ball moving away from ai
-        self.fsm.add_transition("away", "hit ball", self.move_towards_middle, "middle moving")
         self.fsm.add_transition("away", "middle moving", self.move_towards_middle)
 
+        # Start of point
         self.fsm.add_transition("serving", "middle moving", self.move_towards_middle)
 
 
