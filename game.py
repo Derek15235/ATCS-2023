@@ -373,4 +373,4 @@ if __name__ == "__main__":
     game = Game(WIDTH, HEIGHT, player_speed=10, ai_speed=5, player_power=8, ai_power=.5, ai_margin=40)
     game.run()
 
-# End of ChatGPT
+# End of ChatGPT code
